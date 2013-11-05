@@ -109,7 +109,8 @@ under the License.
         <pluginRepository>
           <id>dependency-check-plugin-repository</id>
           <name>JBoss nexus Maven Plugin Repository</name>
-          <url>http://gaol.github.io/dependency-check-maven-plugin/</url>
+          <!--url>http://gaol.github.io/dependency-check-maven-plugin/</url-->
+          <url>file:///home/lgao/.m2/repository/</url>
           <!--url>https://raw.github.com/gaol/dependency-check-maven-plugin/gh-pages/</url-->
           <releases>
             <enabled>true</enabled>
