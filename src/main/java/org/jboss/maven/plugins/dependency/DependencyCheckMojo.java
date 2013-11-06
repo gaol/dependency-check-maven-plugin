@@ -38,11 +38,6 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 @Mojo( name = "check", requiresDependencyResolution = ResolutionScope.TEST, threadSafe = true )
 public class DependencyCheckMojo extends AbstractMojo
 {
-   private static final List<String> excludedGroupIds = new ArrayList<String>();
-   static
-   {
-      excludedGroupIds.add("org.apache.maven.plugins");
-   }
    
    // fields -----------------------------------------------------------------
 
@@ -75,6 +70,8 @@ public class DependencyCheckMojo extends AbstractMojo
     */
    @Parameter(property = "excludedPoms")
    private List<String> excludedPoms;
+   
+   private static List<String> excludedGAs;
    
    /**
     * Excluded Artifacts, specify the GroupId[:ArtifactId][:version] to filter the artifacts out from the missing artifacts.
@@ -141,7 +138,7 @@ public class DependencyCheckMojo extends AbstractMojo
       {
          String groupId = artifact.getGroupId();
          String arId = artifact.getArtifactId();
-         if (projectGroupId.equals(groupId) || excludedGroupIds.contains(groupId))
+         if (projectGroupId.equals(groupId))
          {
             getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
             continue;
@@ -245,6 +242,11 @@ public class DependencyCheckMojo extends AbstractMojo
    
    private List<String> getExcludedGAs() throws IOException, XmlPullParserException
    {
+      if (excludedGAs != null)
+      {
+         getLog().debug("Using Cached excludedGAs: " + excludedGAs);
+         return excludedGAs;
+      }
       if (excludedPoms == null || excludedPoms.size() == 0)
       {
          return null;
@@ -265,6 +267,7 @@ public class DependencyCheckMojo extends AbstractMojo
             }
          }
       }
+      excludedGAs = artifactsGAs;
       return artifactsGAs;
    }
 
