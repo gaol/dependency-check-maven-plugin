@@ -4,6 +4,7 @@
 package org.jboss.maven.plugins.dependency;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
@@ -147,7 +148,7 @@ public class DependencyCheckMojo extends AbstractMojo
       {
          if (output != null)
          {
-            writer = new PrintWriter(output);
+            writer = new PrintWriter(new FileWriter(output, true));
          }
          for (String artiStr: missingArtifacts)
          {
