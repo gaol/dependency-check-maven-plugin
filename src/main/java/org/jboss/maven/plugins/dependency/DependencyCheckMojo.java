@@ -25,8 +25,13 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.IOUtil;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 /**
+ * 
+ * The Maven plugin used to check whether all plugins/dependencies are available in a specified maven repository.
+ * It will print out all missing artifacts in format: G:A:T:V. 
+ * 
  * @author lgao
  *
  */
@@ -63,6 +68,13 @@ public class DependencyCheckMojo extends AbstractMojo
     */
    @Parameter(property = "output")
    private File output;
+   
+   /**
+    * Excluded poms, where plugins/dependencies are defined in their &lt;pluginManagement&gt; and &lt;dependencyManagement&gt; section.
+    * Splits using comma: ','.
+    */
+   @Parameter(property = "excludedPoms")
+   private List<String> excludedPoms; 
    
    public void execute() throws MojoExecutionException, MojoFailureException
    {
@@ -101,15 +113,40 @@ public class DependencyCheckMojo extends AbstractMojo
       
       getLog().debug("Checking against repository: " + repo.getId());
       
+      List<String> excludedGAs;
+      try
+      {
+         excludedGAs = getExcludedGAs();
+      }
+      catch (IOException e)
+      {
+         throw new MojoExecutionException("Error when reading from excluded poms", e);
+      }
+      catch (XmlPullParserException e)
+      {
+         throw new MojoExecutionException("Error when parsing the excluded poms", e);
+      }
+      
       List<String> missingArtifacts = new ArrayList<String>();
       for (Artifact artifact: artifacts)
       {
          String groupId = artifact.getGroupId();
+         String arId = artifact.getArtifactId();
          if (projectGroupId.equals(groupId) || excludedGroupIds.contains(groupId))
          {
             getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
             continue;
          }
+         
+         if (excludedGAs != null && excludedGAs.size() > 0)
+         {
+            if (excludedGAs.contains(groupId + ":" + arId))
+            {
+               getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
+               continue;
+            }
+         }
+         
          getLog().debug("Checking Artifact: " + gatv(artifact));
          
          
@@ -152,7 +189,7 @@ public class DependencyCheckMojo extends AbstractMojo
          }
          for (String artiStr: missingArtifacts)
          {
-            getLog().debug(artiStr);
+            getLog().debug("Added missing artifact: " + artiStr);
             if (writer != null)
             {
                writer.println(artiStr);
@@ -173,6 +210,31 @@ public class DependencyCheckMojo extends AbstractMojo
       }
    }
    
+   private List<String> getExcludedGAs() throws IOException, XmlPullParserException
+   {
+      if (excludedPoms == null || excludedPoms.size() == 0)
+      {
+         return null;
+      }
+      getLog().debug("Checking excluded poms: " + excludedPoms);
+      List<String> artifactsGAs = new ArrayList<String>();
+      MavenDependencyCollector collector = new MavenDependencyCollector();
+      collector.setLogger(getLog());
+      for (String pom: excludedPoms)
+      {
+         URL pomURL = new URL(pom);
+         List<String> gas = collector.collectDeclaredArtifacts(pomURL, null);
+         for (String ga: gas)
+         {
+            if (!artifactsGAs.contains(ga))
+            {
+               artifactsGAs.add(ga);
+            }
+         }
+      }
+      return artifactsGAs;
+   }
+
    /**
     * Gets current ArtifactRepository which will be used to check against
     */
