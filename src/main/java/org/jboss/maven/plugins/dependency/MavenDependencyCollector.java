@@ -58,7 +58,7 @@ public class MavenDependencyCollector
       
       if (logger != null)
       {
-         logger.info("Check dependencies of: " + pomURL.toString());
+         logger.debug("Check artifacts defined in <pluginManagement> and <dependencyManagement> of POM: " + pomURL.toString());
       }
       
       Model model = readMavenModel(pomURL);

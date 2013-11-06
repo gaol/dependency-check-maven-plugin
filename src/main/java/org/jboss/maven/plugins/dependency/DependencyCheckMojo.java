@@ -74,7 +74,15 @@ public class DependencyCheckMojo extends AbstractMojo
     * Splits using comma: ','.
     */
    @Parameter(property = "excludedPoms")
-   private List<String> excludedPoms; 
+   private List<String> excludedPoms;
+   
+   /**
+    * Excluded Artifacts, specify the GroupId[:ArtifactId][:version] to filter the artifacts out from the missing artifacts.
+    * If artifactId is specified, then only that artifact of the same groupId will be filtered, otherwise, all artifactIds of that groupId will be filtered.
+    * If version is specified, then only that version of artifact will be filtered, otherwise, all version of that artifact will be filtered.
+    */
+   @Parameter(property = "excludedArtifacts")
+   private List<String> excludedArtifacts;
    
    public void execute() throws MojoExecutionException, MojoFailureException
    {
@@ -92,6 +100,15 @@ public class DependencyCheckMojo extends AbstractMojo
       artifacts.addAll(dependencies);
       artifacts.addAll(plugins);
       
+
+      ArtifactRepository repo = getArtifactRepository();
+      if (repo == null)
+      {
+         throw new MojoFailureException("Unkown repository: " + this.repoId);
+      }
+      
+      getLog().debug("Checking against repository: " + repo.getId());
+      
       if (output == null)
       {
          getLog().debug("Will record missing artifacts into console out.");
@@ -104,14 +121,6 @@ public class DependencyCheckMojo extends AbstractMojo
             output.getParentFile().mkdirs();
          }
       }
-
-      ArtifactRepository repo = getArtifactRepository();
-      if (repo == null)
-      {
-         throw new MojoFailureException("Unkown repository: " + this.repoId);
-      }
-      
-      getLog().debug("Checking against repository: " + repo.getId());
       
       List<String> excludedGAs;
       try
@@ -141,6 +150,26 @@ public class DependencyCheckMojo extends AbstractMojo
          if (excludedGAs != null && excludedGAs.size() > 0)
          {
             if (excludedGAs.contains(groupId + ":" + arId))
+            {
+               getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
+               continue;
+            }
+         }
+         
+         if (excludedArtifacts != null && excludedArtifacts.size() > 0)
+         {
+            getLog().debug("Excluded Artifacts: " + excludedArtifacts);
+            
+            boolean continueArtifact = false;
+            for (String excludedArti: excludedArtifacts)
+            {
+               if ((groupId + ":" + arId + ":" + artifact.getVersion()).startsWith(excludedArti))
+               {
+                  continueArtifact = true;
+                  break;
+               }
+            }
+            if (continueArtifact)
             {
                getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
                continue;
@@ -186,6 +215,10 @@ public class DependencyCheckMojo extends AbstractMojo
          if (output != null)
          {
             writer = new PrintWriter(new FileWriter(output, true));
+         }
+         else
+         {
+            getLog().info("Missing artifacts in Maven Repository: " + repo.getId() + " are:");
          }
          for (String artiStr: missingArtifacts)
          {
