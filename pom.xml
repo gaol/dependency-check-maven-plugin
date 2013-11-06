@@ -37,9 +37,9 @@ under the License.
   <description>Provides utility goals to check which dependencies are in which repository</description>
 
     <scm>
-        <connection>scm:git:git@github.com:gaol/maven-dependency-check-plugin.git</connection>
-        <developerConnection>scm:git:git@github.com:gaol/maven-dependency-check-plugin.git</developerConnection>
-        <url>http://github.com/gaol/maven-dependency-check-plugin</url>
+        <connection>scm:git:git@github.com:gaol/dependency-check-maven-plugin.git</connection>
+        <developerConnection>scm:git:git@github.com:gaol/dependency-check-maven-plugin.git</developerConnection>
+        <url>http://github.com/gaol/dependency-check-maven-plugin</url>
     </scm>
 
   <properties>
