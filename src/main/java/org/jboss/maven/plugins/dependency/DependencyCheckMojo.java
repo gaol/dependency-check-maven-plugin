@@ -56,7 +56,8 @@ public class DependencyCheckMojo extends AbstractMojo
    
    
    /**
-    * The output file which contains list of missing dependencies or plugins. Default is deps-list.txt in the target directory.
+    * The output file which contains list of missing dependencies or plugins. 
+    * If not specified, it will print list to console out.
     * 
     */
    @Parameter(property = "output")
@@ -80,13 +81,16 @@ public class DependencyCheckMojo extends AbstractMojo
       
       if (output == null)
       {
-         output = new File(project.getBasedir() + "/target/deps-list.txt");
+         getLog().debug("Will record missing artifacts into console out.");
       }
-      if (!output.getParentFile().exists())
+      else
       {
-         output.getParentFile().mkdirs();
+         getLog().info("Will record missing artifacts into: " + output.getAbsolutePath());
+         if (!output.getParentFile().exists())
+         {
+            output.getParentFile().mkdirs();
+         }
       }
-      getLog().debug("Will record missing artifacts into: " + output.getAbsolutePath());
 
       ArtifactRepository repo = getArtifactRepository();
       if (repo == null)
@@ -102,9 +106,12 @@ public class DependencyCheckMojo extends AbstractMojo
          String groupId = artifact.getGroupId();
          if (projectGroupId.equals(groupId) || excludedGroupIds.contains(groupId))
          {
-            getLog().debug("GroupId: " + groupId + " will be skipped.");
+            getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
             continue;
          }
+         getLog().debug("Checking Artifact: " + gatv(artifact));
+         
+         
          String repoURL = repo.getUrl();
          if (!repoURL.endsWith("/"))
          {
@@ -138,11 +145,21 @@ public class DependencyCheckMojo extends AbstractMojo
       PrintWriter writer = null;
       try
       {
-         writer = new PrintWriter(output);
+         if (output != null)
+         {
+            writer = new PrintWriter(output);
+         }
          for (String artiStr: missingArtifacts)
          {
             getLog().debug(artiStr);
-            writer.println(artiStr);
+            if (writer != null)
+            {
+               writer.println(artiStr);
+            }
+            else
+            {
+               getLog().info(artiStr);
+            }
          }
       }
       catch (IOException e)
