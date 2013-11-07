@@ -46,7 +46,7 @@ to see more detail about the plugin properties.
 Below is the information got from the command above:
 
 <pre>
-[INFO] Apache Maven Dependency Check Plugin 1.0.0
+[INFO] Apache Maven Dependency Check Plugin 1.0.1
   Provides utility goals to check which dependencies are in which repository
 
 dependency-check:check
@@ -80,3 +80,5 @@ dependency-check:check
 
 </pre>
 
+
+   * NOTE: If the <b>-Doutput=</b> is specified to a absolute file path, all missing artifacts will be written to this file in case of multiple modules project.
