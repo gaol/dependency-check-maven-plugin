@@ -30,17 +30,18 @@ under the License.
 
   <groupId>org.jboss.maven.plugins</groupId>
   <artifactId>dependency-check-maven-plugin</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.1</version>
   <packaging>maven-plugin</packaging>
 
   <name>Apache Maven Dependency Check Plugin</name>
   <description>Provides utility goals to check which dependencies are in which repository</description>
 
     <scm>
-        <connection>scm:git:git@github.com:gaol/maven-dependency-check-plugin.git</connection>
-        <developerConnection>scm:git:git@github.com:gaol/maven-dependency-check-plugin.git</developerConnection>
-        <url>http://github.com/gaol/maven-dependency-check-plugin</url>
-    </scm>
+        <connection>scm:git:git@github.com:gaol/dependency-check-maven-plugin.git</connection>
+        <developerConnection>scm:git:git@github.com:gaol/dependency-check-maven-plugin.git</developerConnection>
+        <url>http://github.com/gaol/dependency-check-maven-plugin</url>
+    <tag>dependency-check-maven-plugin-1.0.1</tag>
+  </scm>
 
   <properties>
     <mavenVersion>3.1.1</mavenVersion>
