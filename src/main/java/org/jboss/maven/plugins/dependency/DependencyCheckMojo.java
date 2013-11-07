@@ -3,7 +3,9 @@
  */
 package org.jboss.maven.plugins.dependency;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -207,18 +209,26 @@ public class DependencyCheckMojo extends AbstractMojo
       }
       
       PrintWriter writer = null;
+      List<String> recorded = new ArrayList<String>();
       try
       {
          if (output != null)
          {
+            recorded = readRecordedFrom(output);
             writer = new PrintWriter(new FileWriter(output, true));
          }
          else
          {
             getLog().info("Missing artifacts in Maven Repository: " + repo.getId() + " are:");
          }
+         getLog().info("Added are: " + recorded);
          for (String artiStr: missingArtifacts)
          {
+            if (recorded.contains(artiStr))
+            {
+               getLog().info("Added Arleady: " + artiStr);
+               continue;
+            }
             getLog().debug("Added missing artifact: " + artiStr);
             if (writer != null)
             {
@@ -232,7 +242,7 @@ public class DependencyCheckMojo extends AbstractMojo
       }
       catch (IOException e)
       {
-         getLog().warn("Error to write data into file: " + output.getAbsolutePath(), e);
+         throw new MojoExecutionException("Error to write data into file: " + output.getAbsolutePath(), e);
       }
       finally
       {
@@ -240,6 +250,30 @@ public class DependencyCheckMojo extends AbstractMojo
       }
    }
    
+   private List<String> readRecordedFrom(File file) throws IOException
+   {
+      List<String> list = new ArrayList<String>();
+      if (!file.exists() || !file.canRead())
+      {
+         return list;
+      }
+      BufferedReader reader = null;
+      try
+      {
+         reader = new BufferedReader(new FileReader(file));
+         String line = null;
+         while((line = reader.readLine()) != null)
+         {
+            list.add(line);
+         }
+      }
+      finally
+      {
+         IOUtil.close(reader);
+      }
+      return list;
+   }
+
    private List<String> getExcludedGAs() throws IOException, XmlPullParserException
    {
       if (excludedGAs != null)
