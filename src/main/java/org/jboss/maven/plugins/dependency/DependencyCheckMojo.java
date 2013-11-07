@@ -221,7 +221,7 @@ public class DependencyCheckMojo extends AbstractMojo
          {
             getLog().info("Missing artifacts in Maven Repository: " + repo.getId() + " are:");
          }
-         getLog().info("Added are: " + recorded);
+         getLog().debug("Added are: " + recorded);
          for (String artiStr: missingArtifacts)
          {
             if (recorded.contains(artiStr))
