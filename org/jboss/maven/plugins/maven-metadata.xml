@@ -2,7 +2,7 @@
 <metadata>
   <plugins>
     <plugin>
-      <name>Maven Dependency Check Plugin</name>
+      <name>Apache Maven Dependency Check Plugin</name>
       <prefix>dependency-check</prefix>
       <artifactId>dependency-check-maven-plugin</artifactId>
     </plugin>
