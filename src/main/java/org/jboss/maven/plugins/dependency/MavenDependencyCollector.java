@@ -117,6 +117,10 @@ public class MavenDependencyCollector
          String groupId = dep.getGroupId();
          String artiId = dep.getArtifactId();
          String line = groupId + ":" + artiId;
+         if (config.isIncludeVersion())
+         {
+            line = line + ":" + dep.getVersion();
+         }
          if (!dependencies.contains(line))
          {
             dependencies.add(line);
@@ -128,6 +132,10 @@ public class MavenDependencyCollector
          String groupId = plugin.getGroupId();
          String artiId = plugin.getArtifactId();
          String line = groupId + ":" + artiId;
+         if (config.isIncludeVersion())
+         {
+            line = line + ":" + plugin.getVersion();
+         }
          if (!dependencies.contains(line))
          {
             dependencies.add(line);

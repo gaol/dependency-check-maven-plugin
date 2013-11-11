@@ -15,7 +15,29 @@ public class CollectConfig
     */
    private String profile;
    
+   /**
+    * Whether the version is included in the collected string
+    */
+   private boolean includeVersion;
    
+
+   /**
+    * @return the includeVersion
+    */
+   public boolean isIncludeVersion()
+   {
+      return includeVersion;
+   }
+
+
+   /**
+    * @param includeVersion the includeVersion to set
+    */
+   public void setIncludeVersion(boolean includeVersion)
+   {
+      this.includeVersion = includeVersion;
+   }
+
 
    /**
     * @return the profile

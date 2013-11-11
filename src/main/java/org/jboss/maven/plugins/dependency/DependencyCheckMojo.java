@@ -10,6 +10,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -18,38 +19,35 @@ import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.repository.ArtifactRepository;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.IOUtil;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 /**
  * 
- * The Maven plugin used to check whether all plugins/dependencies are available in a specified maven repository.
- * It will print out all missing artifacts in format: G:A:T:V. 
+ * Goal of "dependency-check:check" is used to check missing artifacts in a specified Maven Repository.
  * 
- * @author lgao
+ * The format of the list printed out is: G:A:T:V, where G is the groupId, A is the ArtifactId, T is the Type, V is the version.
+ * 
+ * It will print the list to console by default, or you can specify an output file by a parameter: <b>-Doutput=</b>.
+ * 
+ * This goal checks only one Maven Repository a time, the <b>-DrepoURL</b> has higher priority than <b>-DrepoId</b>.
+ *  
+ * @author lgao@redhat.com
  *
  */
 @Mojo( name = "check", requiresDependencyResolution = ResolutionScope.TEST, threadSafe = true )
-public class DependencyCheckMojo extends AbstractMojo
+public class DependencyCheckMojo extends AbstractDependencyCheckMojo
 {
    
    // fields -----------------------------------------------------------------
 
-   /**
-    * The Maven project.
-    */
-   @Component
-   private MavenProject project;
    
    /**
+    * 
     * Which repository do you want to check against. Default is the maven central repository
     * The value is one of predefined remote repositories in the current active profiles.
     * 
@@ -57,31 +55,24 @@ public class DependencyCheckMojo extends AbstractMojo
    @Parameter(property = "repoId", defaultValue = "central")
    private String repoId;
    
+   /**
+    * Instead of specifies a predefined repoId, a Maven Repository URL can be specified.
+    * This parameter has higher priority.
+    */
+   @Parameter(property = "repoURL")
+   private String repoURL;
    
    /**
-    * The output file which contains list of missing dependencies or plugins. 
+    * Specify the file where the missing artifacts list will be written to. 
+    * 
     * If not specified, it will print list to console out.
+    * 
+    * If an absolute file path(starts with '/') is specified, all missing artifacts will be written to this file in case of multiple modules project.
     * 
     */
    @Parameter(property = "output")
    private File output;
    
-   /**
-    * Excluded poms, where plugins/dependencies are defined in their &lt;pluginManagement&gt; and &lt;dependencyManagement&gt; section.
-    * Splits using comma: ','.
-    */
-   @Parameter(property = "excludedPoms")
-   private List<String> excludedPoms;
-   
-   private static List<String> excludedGAs;
-   
-   /**
-    * Excluded Artifacts, specify the GroupId[:ArtifactId][:version] to filter the artifacts out from the missing artifacts.
-    * If artifactId is specified, then only that artifact of the same groupId will be filtered, otherwise, all artifactIds of that groupId will be filtered.
-    * If version is specified, then only that version of artifact will be filtered, otherwise, all version of that artifact will be filtered.
-    */
-   @Parameter(property = "excludedArtifacts")
-   private List<String> excludedArtifacts;
    
    public void execute() throws MojoExecutionException, MojoFailureException
    {
@@ -100,13 +91,52 @@ public class DependencyCheckMojo extends AbstractMojo
       artifacts.addAll(plugins);
       
 
-      ArtifactRepository repo = getArtifactRepository();
-      if (repo == null)
+      URL repoURLLink = null;
+      if (this.repoURL != null && this.repoURL.trim().length() > 0)
       {
-         throw new MojoFailureException("Unkown repository: " + this.repoId);
+         try
+         {
+            repoURLLink = new URL(repoURL);
+         }
+         catch (MalformedURLException e)
+         {
+            throw new MojoExecutionException("Wrong repository URL: " + this.repoURL, e);
+         }
       }
-      
-      getLog().debug("Checking against repository: " + repo.getId());
+      if (repoURLLink == null)
+      {
+         ArtifactRepository repo = getArtifactRepository();
+         if (repo == null && this.repoId != null)
+         {
+            throw new MojoFailureException("Unkown repository: " + this.repoId);
+         }
+         if (repo == null)
+         {
+            try
+            {
+               repoURLLink = new URL(MAVEN_CENTRAL_REPO_URL);
+            }
+            catch (MalformedURLException e)
+            {
+            }
+         }
+         else
+         {
+            try
+            {
+               repoURLLink = new URL(repo.getUrl());
+            }
+            catch (MalformedURLException e)
+            {
+               throw new MojoFailureException("Unkown repository: " + repo.getUrl(), e);
+            }
+         }
+      }
+      if (repoURLLink == null)
+      {
+         throw new MojoExecutionException("Maven Repository is not specified.");
+      }
+      getLog().debug("Checking against repository: " + repoURLLink.toString());
       
       if (output == null)
       {
@@ -121,20 +151,6 @@ public class DependencyCheckMojo extends AbstractMojo
          }
       }
       
-      List<String> excludedGAs;
-      try
-      {
-         excludedGAs = getExcludedGAs();
-      }
-      catch (IOException e)
-      {
-         throw new MojoExecutionException("Error when reading from excluded poms", e);
-      }
-      catch (XmlPullParserException e)
-      {
-         throw new MojoExecutionException("Error when parsing the excluded poms", e);
-      }
-      
       List<String> missingArtifacts = new ArrayList<String>();
       for (Artifact artifact: artifacts)
       {
@@ -146,39 +162,14 @@ public class DependencyCheckMojo extends AbstractMojo
             continue;
          }
          
-         if (excludedGAs != null && excludedGAs.size() > 0)
+         if (isArtifactExcluded(groupId, arId, artifact.getVersion(),artifact.getScope()))
          {
-            if (excludedGAs.contains(groupId + ":" + arId))
-            {
-               getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
-               continue;
-            }
-         }
-         
-         if (excludedArtifacts != null && excludedArtifacts.size() > 0)
-         {
-            getLog().debug("Excluded Artifacts: " + excludedArtifacts);
-            
-            boolean continueArtifact = false;
-            for (String excludedArti: excludedArtifacts)
-            {
-               if ((groupId + ":" + arId + ":" + artifact.getVersion()).startsWith(excludedArti))
-               {
-                  continueArtifact = true;
-                  break;
-               }
-            }
-            if (continueArtifact)
-            {
-               getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
-               continue;
-            }
+            continue;
          }
          
          getLog().debug("Checking Artifact: " + gatv(artifact));
          
-         
-         String repoURL = repo.getUrl();
+         String repoURL = repoURLLink.toString();
          if (!repoURL.endsWith("/"))
          {
             repoURL = repoURL + "/";
@@ -219,7 +210,7 @@ public class DependencyCheckMojo extends AbstractMojo
          }
          else
          {
-            getLog().info("Missing artifacts in Maven Repository: " + repo.getId() + " are:");
+            getLog().info("Missing artifacts in Maven Repository: " + repoURLLink.toString() + " are:");
          }
          getLog().debug("Added are: " + recorded);
          for (String artiStr: missingArtifacts)
@@ -274,37 +265,6 @@ public class DependencyCheckMojo extends AbstractMojo
       return list;
    }
 
-   private List<String> getExcludedGAs() throws IOException, XmlPullParserException
-   {
-      if (excludedGAs != null)
-      {
-         getLog().debug("Using Cached excludedGAs: " + excludedGAs);
-         return excludedGAs;
-      }
-      if (excludedPoms == null || excludedPoms.size() == 0)
-      {
-         return null;
-      }
-      getLog().debug("Checking excluded poms: " + excludedPoms);
-      List<String> artifactsGAs = new ArrayList<String>();
-      MavenDependencyCollector collector = new MavenDependencyCollector();
-      collector.setLogger(getLog());
-      for (String pom: excludedPoms)
-      {
-         URL pomURL = new URL(pom);
-         List<String> gas = collector.collectDeclaredArtifacts(pomURL, null);
-         for (String ga: gas)
-         {
-            if (!artifactsGAs.contains(ga))
-            {
-               artifactsGAs.add(ga);
-            }
-         }
-      }
-      excludedGAs = artifactsGAs;
-      return artifactsGAs;
-   }
-
    /**
     * Gets current ArtifactRepository which will be used to check against
     */
@@ -325,17 +285,4 @@ public class DependencyCheckMojo extends AbstractMojo
    }
    
    
-   private String gatv(Artifact artifact)
-   {
-      StringBuilder sb = new StringBuilder();
-      sb.append(artifact.getGroupId());
-      sb.append(":");
-      sb.append(artifact.getArtifactId());
-      sb.append(":");
-      sb.append(artifact.getType());
-      sb.append(":");
-      sb.append(artifact.getVersion());
-      return sb.toString();
-   }
-
 }

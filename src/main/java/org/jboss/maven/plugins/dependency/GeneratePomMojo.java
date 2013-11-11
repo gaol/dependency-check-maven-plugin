@@ -13,30 +13,59 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.IOUtil;
 
 /**
+ * 
+ * Goal of 'dependency-check:generate-poms' will generate each test pom file for each BOM module.
+ * 
+ * It can be used to check against whether the BOM declared correct dependencies versions using the generated pom files.
+ * 
  * @author lgao
  *
  */
-@Mojo(name = "bom-test", defaultPhase = LifecyclePhase.VERIFY, requiresDependencyResolution = ResolutionScope.COMPILE, requiresProject = true, threadSafe = true, aggregator = false)
-public class BomTestMojo extends AbstractMojo
+@Mojo(name = "generate-poms", defaultPhase = LifecyclePhase.VERIFY, requiresDependencyResolution = ResolutionScope.COMPILE, requiresProject = true, threadSafe = true, aggregator = false)
+public class GeneratePomMojo extends AbstractDependencyCheckMojo
 {
-
-   @Component
-   private MavenProject project;
    
    private static final String BOM_SUFFIX = "-test-bom";
    
    private static final String DEFAULT_VERSION = "1.0.0";
+   
+   /**
+    * Specify the version of the BOM to be tested in the generated POM file.
+    * 
+    * Usually, the version is what the current BOM definition is, but sometime that version is not available in the maven repository yet,
+    * it is better to give an alternative version in the generated pom file.
+    * 
+    * The version will be in the dependency of &lt;dependencyManagement&gt; section with <b>import</b> scope.
+    * 
+    * For example:
+    * 
+    * <pre>
+    *   &lt;dependencyManagement&gt;
+    *     &lt;dependencies&gt;
+    *       &lt;dependency&gt;
+    *         &lt;groupId&gt;org.jboss.bom.eap&lt;/groupId&gt;
+    *         &lt;artifactId&gt;jboss-javaee-6.0-with-hibernate3&lt;/artifactId&gt;
+    *         &lt;version&gt;6.2.0-build-SNAPSHOT&lt;/version&gt;
+    *         &lt;type&gt;pom&lt;/type&gt;
+    *         &lt;scope&gt;import&lt;/scope&gt;
+    *       &lt;/dependency&gt;
+    *     &lt;/dependencies&gt;
+    *   &lt;/dependencyManagement&gt;
+    * </pre>
+    */
+   @Parameter(property = "bomVersion")
+   private String bomVersion;
+   
    
    public void execute() throws MojoExecutionException, MojoFailureException
    {
@@ -71,10 +100,16 @@ public class BomTestMojo extends AbstractMojo
              
              depInMan.setGroupId(groupId);
              depInMan.setArtifactId(artifactId);
-             depInMan.setVersion(version);
+             String pomVersion = version;
+             if (bomVersion != null && bomVersion.trim().length() > 0)
+             {
+                pomVersion = bomVersion;
+             }
+             depInMan.setVersion(pomVersion);
              depInMan.setType(type);
              depInMan.setScope("import");
              depMan.addDependency(depInMan);
+             
              
              for (Dependency dep : dependencies) {
                 if (dep.getScope() != null
@@ -83,6 +118,12 @@ public class BomTestMojo extends AbstractMojo
                     getLog().debug("Ignoring runtime/system dependency " + dep);
                     continue;
                 }
+                
+                if (isArtifactExcluded(dep.getGroupId(), dep.getArtifactId(), dep.getVersion(), dep.getScope()))
+                {
+                   continue;
+                }
+                
                 // we only need groupId and artifactId
                 Dependency depClone = new Dependency();
                 depClone.setGroupId(dep.getGroupId());
@@ -91,7 +132,7 @@ public class BomTestMojo extends AbstractMojo
                 model.addDependency(depClone);
             }
              
-             File generatedPom = new File(rootTargetDir, groupId + "-" + artifactId + "-" + version + BOM_SUFFIX + ".pom");
+             File generatedPom = new File(rootTargetDir, groupId + "-" + artifactId + "-" + pomVersion + BOM_SUFFIX + ".pom");
              getLog().info("Generates test bom pom at: " + generatedPom.getAbsolutePath());
              
              OutputStream out = null;
