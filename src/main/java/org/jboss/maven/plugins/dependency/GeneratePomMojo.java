@@ -113,10 +113,16 @@ public class GeneratePomMojo extends AbstractDependencyCheckMojo
              
              for (Dependency dep : dependencies) {
                 if (dep.getScope() != null
-                    && (dep.getScope().equals("runtime") || dep.getScope().equals("system"))) {
+                    && (dep.getScope().equals("runtime") || dep.getScope().equals("system") || dep.getScope().equals("import"))) {
                    
-                    getLog().debug("Ignoring runtime/system dependency " + dep);
+                    getLog().debug("Ignoring runtime/system/import dependency " + dep);
                     continue;
+                }
+                
+                if (dep.getType() != null && dep.getType().equals("pom"))
+                {
+                   getLog().debug("Ingoring pom dependencies" + dep);
+                   continue;
                 }
                 
                 if (isArtifactExcluded(dep.getGroupId(), dep.getArtifactId(), dep.getVersion(), dep.getScope()))
