@@ -4,9 +4,8 @@
 package org.jboss.maven.plugins.dependency;
 
 import java.io.File;
-import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.List;
 
 import org.apache.maven.model.Dependency;
@@ -20,6 +19,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.shared.artifact.filter.collection.ArtifactsFilter;
 import org.codehaus.plexus.util.IOUtil;
 
 /**
@@ -67,7 +67,8 @@ public class GeneratePomMojo extends AbstractDependencyCheckMojo
    private String bomVersion;
    
    
-   public void execute() throws MojoExecutionException, MojoFailureException
+   @Override
+   protected void doExecute() throws MojoExecutionException, MojoFailureException
    {
       DependencyManagement depmgmt = project.getDependencyManagement();
       if (depmgmt != null) {
@@ -125,7 +126,7 @@ public class GeneratePomMojo extends AbstractDependencyCheckMojo
                    continue;
                 }
                 
-                if (isArtifactExcluded(dep.getGroupId(), dep.getArtifactId(), dep.getVersion(), dep.getScope()))
+                if (isDependencyExcluded(dep))
                 {
                    continue;
                 }
@@ -141,10 +142,10 @@ public class GeneratePomMojo extends AbstractDependencyCheckMojo
              File generatedPom = new File(rootTargetDir, groupId + "-" + artifactId + "-" + pomVersion + BOM_SUFFIX + ".pom");
              getLog().info("Generates test bom pom at: " + generatedPom.getAbsolutePath());
              
-             OutputStream out = null;
+             FileWriter out = null;
              try
              {
-                out = new FileOutputStream(generatedPom);
+                out = new FileWriter(generatedPom);
                 new MavenXpp3Writer().write(out, model);
              }
              catch(IOException e)
@@ -155,9 +156,14 @@ public class GeneratePomMojo extends AbstractDependencyCheckMojo
              {
                 IOUtil.close(out);
              }
-             
           }
       }
+   }
+   
+   @Override
+   protected ArtifactsFilter getMarkedArtifactFilter()
+   {
+      return null;
    }
    
    /**

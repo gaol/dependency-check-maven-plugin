@@ -10,7 +10,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,11 +18,17 @@ import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
+import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.dependency.utils.DependencyStatusSets;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.shared.artifact.filter.collection.ArtifactFilterException;
+import org.apache.maven.shared.artifact.filter.collection.ArtifactsFilter;
+import org.apache.maven.shared.artifact.filter.collection.FilterArtifacts;
 import org.codehaus.plexus.util.IOUtil;
 
 /**
@@ -45,6 +50,11 @@ public class DependencyCheckMojo extends AbstractDependencyCheckMojo
    
    // fields -----------------------------------------------------------------
 
+   /**
+    * Remote repositories which will be searched for plugins.
+    */
+   @Parameter( defaultValue = "${project.pluginArtifactRepositories}", readonly = true, required = true )
+   private List<ArtifactRepository> remotePluginRepositories;
    
    /**
     * 
@@ -63,177 +73,203 @@ public class DependencyCheckMojo extends AbstractDependencyCheckMojo
    private String repoURL;
    
    /**
-    * Specify the file where the missing artifacts list will be written to. 
     * 
-    * If not specified, it will print list to console out.
-    * 
-    * If an absolute file path(starts with '/') is specified, all missing artifacts will be written to this file in case of multiple modules project.
+    * Include parent poms in the dependency resolution list.
     * 
     */
-   @Parameter(property = "output")
-   private File output;
+   @Parameter( property = "includeParents", defaultValue = "false" )
+   private boolean includeParents;
    
    
-   public void execute() throws MojoExecutionException, MojoFailureException
-   {
-      
-      String projectGroupId = project.getGroupId();
-      
-      // dependencies
-      Set<Artifact> dependencies = project.getArtifacts();
-      
-      // plugins
-      Set<Artifact> plugins = project.getPluginArtifacts();
-      
-      // collect all artifacts needed
-      Set<Artifact> artifacts = new HashSet<Artifact>();
-      artifacts.addAll(dependencies);
-      artifacts.addAll(plugins);
-      
-
-      URL repoURLLink = null;
-      if (this.repoURL != null && this.repoURL.trim().length() > 0)
+   protected void doExecute() throws MojoExecutionException ,MojoFailureException {
+      try
       {
-         try
+         URL repoURLLink = null;
+         if (this.repoURL != null && this.repoURL.trim().length() > 0)
          {
             repoURLLink = new URL(repoURL);
          }
-         catch (MalformedURLException e)
+         if (repoURLLink == null)
          {
-            throw new MojoExecutionException("Wrong repository URL: " + this.repoURL, e);
-         }
-      }
-      if (repoURLLink == null)
-      {
-         ArtifactRepository repo = getArtifactRepository();
-         if (repo == null && this.repoId != null)
-         {
-            throw new MojoFailureException("Unkown repository: " + this.repoId);
-         }
-         if (repo == null)
-         {
-            try
+            ArtifactRepository repo = getArtifactRepository();
+            if (repo == null && this.repoId != null)
             {
-               repoURLLink = new URL(MAVEN_CENTRAL_REPO_URL);
+               throw new MojoFailureException("Unkown repository: " + this.repoId);
             }
-            catch (MalformedURLException e)
+            if (repo == null)
             {
+               
+               repoURLLink = new URL(AbstractDependencyCheckMojo.MAVEN_CENTRAL_REPO_URL);
             }
-         }
-         else
-         {
-            try
+            else
             {
                repoURLLink = new URL(repo.getUrl());
             }
-            catch (MalformedURLException e)
-            {
-               throw new MojoFailureException("Unkown repository: " + repo.getUrl(), e);
-            }
          }
-      }
-      if (repoURLLink == null)
-      {
-         throw new MojoExecutionException("Maven Repository is not specified.");
-      }
-      getLog().debug("Checking against repository: " + repoURLLink.toString());
-      
-      if (output == null)
-      {
-         getLog().debug("Will record missing artifacts into console out.");
-      }
-      else
-      {
-         getLog().info("Will record missing artifacts into: " + output.getAbsolutePath());
-         if (!output.getParentFile().exists())
-         {
-            output.getParentFile().mkdirs();
-         }
-      }
-      
-      List<String> missingArtifacts = new ArrayList<String>();
-      for (Artifact artifact: artifacts)
-      {
-         String groupId = artifact.getGroupId();
-         String arId = artifact.getArtifactId();
-         if (projectGroupId.equals(groupId))
-         {
-            getLog().debug("Artifact: " + gatv(artifact) + " will be skipped.");
-            continue;
-         }
-         
-         if (isArtifactExcluded(groupId, arId, artifact.getVersion(),artifact.getScope()))
-         {
-            continue;
-         }
-         
-         getLog().debug("Checking Artifact: " + gatv(artifact));
-         
          String repoURL = repoURLLink.toString();
          if (!repoURL.endsWith("/"))
          {
             repoURL = repoURL + "/";
          }
-         String artifactLink = repoURL + artifact.getGroupId().replaceAll("\\.", "/") + "/" + artifact.getArtifactId() + "/" + artifact.getVersion() + "/" + artifact.getArtifactId() + "-" + artifact.getVersion() + ".pom";
-         getLog().debug("Checking artifact: " + gatv(artifact) + " at: " + artifactLink);
-         HttpURLConnection urlConn = null;
-         try
+         getLog().debug("Checking against repository: " + repoURL);
+         
+         if (this.outputFile == null)
          {
-            URL linkURL = new URL(artifactLink);
-            urlConn = (HttpURLConnection)linkURL.openConnection();
-            urlConn.connect();
-            int code = urlConn.getResponseCode();
-            if (code >= 400)
+            getLog().debug("Will record missing artifacts into console out.");
+         }
+         else
+         {
+            getLog().info("Will record missing artifacts into: " + this.outputFile.getAbsolutePath());
+            if (!this.outputFile.getParentFile().exists())
             {
-               getLog().debug("\tNot found.");
-               missingArtifacts.add(gatv(artifact));
+               this.outputFile.getParentFile().mkdirs();
             }
          }
-         catch (IOException e)
+         
+         // all artifacts
+         Set<Artifact> artifacts = getAllArtifacts();
+         for (Artifact artifact: artifacts)
          {
-            getLog().warn("Wrong link: " + artifactLink, e);
-         }
-         finally
-         {
-            urlConn.disconnect();
+            // besides the default filter, there is another filter here.
+            if (isArtifactExcluded(artifact))
+            {
+               getLog().debug("Artifact: " + gatv(artifact) + " is skipped during dependency check.");
+               continue;
+            }
+            String artifactLink = repoURL + artifact.getGroupId().replaceAll("\\.", "/") + "/" + artifact.getArtifactId() + "/" + artifact.getVersion() + "/" + artifact.getArtifactId() + "-" + artifact.getVersion() + ".pom";
+            getLog().debug("Checking artifact: " + gatv(artifact) + " at: " + artifactLink);
+            HttpURLConnection urlConn = null;
+            try
+            {
+               URL linkURL = new URL(artifactLink);
+               urlConn = (HttpURLConnection)linkURL.openConnection();
+               urlConn.connect();
+               int code = urlConn.getResponseCode();
+               if (code >= 400)
+               {
+                  getLog().debug("Artifact: " + gatv(artifact) + " does not exist in repository: " + repoURL);
+                  writeMissingArtifact(artifact);
+               }
+               else
+               {
+                  getLog().debug("Artifact: " + gatv(artifact) + " is resolved.");
+               }
+            }
+            catch (IOException e)
+            {
+               getLog().warn("Wrong link: " + artifactLink, e);
+            }
+            finally
+            {
+               urlConn.disconnect();
+            }
          }
       }
+      catch (Exception e)
+      {
+         throw new MojoFailureException("Error: ", e);
+      }
+   };
+   
+   private Set<Artifact> getAllArtifacts() throws Exception
+   {
+      Set<Artifact> artifacts = new HashSet<Artifact>();
       
+      // all dependencies
+      DependencyStatusSets result = this.getDependencySets(false, includeParents);
+      if (result.getResolvedDependencies() != null && !result.getResolvedDependencies().isEmpty())
+      {
+         artifacts.addAll(result.getResolvedDependencies());
+      }
+      if (result.getSkippedDependencies() != null && !result.getSkippedDependencies().isEmpty())
+      {
+         artifacts.addAll(result.getSkippedDependencies());
+      }
+      if (result.getUnResolvedDependencies() != null && !result.getUnResolvedDependencies().isEmpty())
+      {
+         artifacts.addAll(result.getUnResolvedDependencies());
+      }
+      
+      // all plugins
+      final Set<Artifact> plugins = resolvePluginArtifacts();
+      for ( final Artifact plugin : plugins )
+      {
+         artifacts.add(plugin);
+         // adds all plugin dependencies if not exclude transitive
+         if (!this.excludeTransitive)
+         {
+            for ( final Artifact artifact : resolveArtifactDependencies( plugin ) )
+            {
+               artifacts.add(artifact);
+            }
+         }
+      }
+      return artifacts;
+   }
+   
+   /**
+    * This method resolves the plugin artifacts from the project.
+    *
+    * @return set of resolved plugin artifacts.
+    * @throws ArtifactResolutionException
+    * @throws ArtifactNotFoundException
+    * @throws ArtifactFilterException 
+    */
+   @SuppressWarnings( "unchecked" )
+   protected Set<Artifact> resolvePluginArtifacts()
+       throws ArtifactResolutionException, ArtifactNotFoundException, ArtifactFilterException
+   {
+       final Set<Artifact> plugins = project.getPluginArtifacts();
+       final Set<Artifact> reports = project.getReportArtifacts();
+
+       Set<Artifact> artifacts = new HashSet<Artifact>();
+       artifacts.addAll( reports );
+       artifacts.addAll( plugins );
+
+       final FilterArtifacts filter = getPluginArtifactsFilter();
+       artifacts = filter.filter( artifacts );
+
+       //        final ArtifactFilter filter = getPluginFilter();
+       for ( final Artifact artifact : new HashSet<Artifact>( artifacts ) )
+       {
+           // resolve the new artifact
+           this.resolver.resolve( artifact, this.remotePluginRepositories, this.getLocal() );
+       }
+       return artifacts;
+   }
+   
+   @Override
+   protected ArtifactsFilter getMarkedArtifactFilter()
+   {
+      return null;
+   }
+   
+   private void writeMissingArtifact(Artifact artifact) throws IOException
+   {
       PrintWriter writer = null;
       List<String> recorded = new ArrayList<String>();
       try
       {
-         if (output != null)
+         if (this.outputFile != null)
          {
-            recorded = readRecordedFrom(output);
-            writer = new PrintWriter(new FileWriter(output, true));
+            recorded = readRecordedFrom(outputFile);
+            writer = new PrintWriter(new FileWriter(outputFile, true));
+         }
+         String logStr = gatv(artifact);
+         if (recorded.contains(logStr))
+         {
+            getLog().info("Added Arleady: " + logStr);
+            return;
+         }
+         getLog().debug("Log artifact: " + logStr);
+         if (writer != null)
+         {
+            writer.println(logStr);
          }
          else
          {
-            getLog().info("Missing artifacts in Maven Repository: " + repoURLLink.toString() + " are:");
+            getLog().info(logStr);
          }
-         getLog().debug("Added are: " + recorded);
-         for (String artiStr: missingArtifacts)
-         {
-            if (recorded.contains(artiStr))
-            {
-               getLog().info("Added Arleady: " + artiStr);
-               continue;
-            }
-            getLog().debug("Added missing artifact: " + artiStr);
-            if (writer != null)
-            {
-               writer.println(artiStr);
-            }
-            else
-            {
-               getLog().info(artiStr);
-            }
-         }
-      }
-      catch (IOException e)
-      {
-         throw new MojoExecutionException("Error to write data into file: " + output.getAbsolutePath(), e);
       }
       finally
       {

@@ -10,27 +10,19 @@ import java.util.List;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.model.Dependency;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.Component;
+import org.apache.maven.plugin.dependency.resolvers.AbstractResolveMojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 /**
  * @author lgao
  *
  */
-public abstract class AbstractDependencyCheckMojo extends AbstractMojo
+public abstract class AbstractDependencyCheckMojo extends AbstractResolveMojo
 {
    
    public static final String MAVEN_CENTRAL_REPO_URL = "http://central.maven.org/maven2/";
-   
-   /**
-    * The Maven project.
-    */
-   @Component
-   protected MavenProject project;
    
    // This is used for cache
    protected static List<String> excludedGAs;
@@ -97,7 +89,7 @@ public abstract class AbstractDependencyCheckMojo extends AbstractMojo
       return sb.toString();
    }
    
-   protected List<String> getExcludedGAs() throws IOException, XmlPullParserException
+   private List<String> getExcludedGAs() throws IOException, XmlPullParserException
    {
       if (excludedPoms == null || excludedPoms.size() == 0)
       {
@@ -125,7 +117,17 @@ public abstract class AbstractDependencyCheckMojo extends AbstractMojo
       return artifactsGAs;
    }
    
-   protected boolean isArtifactExcluded(String groupId, String artifactId, String version, String artifactScope) throws MojoExecutionException
+   protected boolean isArtifactExcluded(Artifact artifact) throws MojoExecutionException
+   {
+      return isArtifactExcluded(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), artifact.getScope());
+   }
+   
+   protected boolean isDependencyExcluded(Dependency dependency) throws MojoExecutionException
+   {
+      return isArtifactExcluded(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(), dependency.getScope());
+   }
+   
+   private boolean isArtifactExcluded(String groupId, String artifactId, String version, String artifactScope) throws MojoExecutionException
    {
       if (excludedGAs == null)
       {
@@ -154,13 +156,14 @@ public abstract class AbstractDependencyCheckMojo extends AbstractMojo
 
       String line = groupId + ":" + artifactId + ":" + version;
       
+      getLog().debug("Checking if " + line + " should be skipped during dependency check.");
+      
       if (this.scope != null)
       {
          getLog().debug("Excluded scope: " + scope);
       }
       if (this.scope != null && this.scope.trim().equals(artifactScope))
       {
-         getLog().debug("Artifact: " + line + ":" + artifactScope + " will be skipped.");
          return true;
       }
       
@@ -168,10 +171,8 @@ public abstract class AbstractDependencyCheckMojo extends AbstractMojo
       {
          for (String gaV: excludedGAs)
          {
-            getLog().debug("Checking: " + gaV);
             if (line.startsWith(gaV))
             {
-               getLog().debug("Artifact: " + line + " will be skipped.");
                return true;
             }
          }
@@ -179,18 +180,15 @@ public abstract class AbstractDependencyCheckMojo extends AbstractMojo
       
       if (excludedArtifacts != null && excludedArtifacts.size() > 0)
       {
-         getLog().debug("Excluded Artifacts: " + excludedArtifacts);
          
          for (String excludedArti: excludedArtifacts)
          {
             if (line.startsWith(excludedArti))
             {
-               getLog().debug("Artifact: " + line + " will be skipped.");
                return true;
             }
          }
       }
-      
       return false;
    }
    

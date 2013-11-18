@@ -5,6 +5,7 @@ package org.jboss.maven.plugins.dependency;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -217,7 +218,7 @@ public class MavenDependencyCollector
       try
       {
          input = pomURL.openStream();
-         model = new MavenXpp3Reader().read(input);
+         model = new MavenXpp3Reader().read(new InputStreamReader(input));
       }
       finally
       {
@@ -231,11 +232,11 @@ public class MavenDependencyCollector
    {
       if (config.getProfile() != null && model.getProfiles() != null && model.getProfiles().size() > 0)
       {
-         for (Profile p: model.getProfiles())
+         for (Object p: model.getProfiles())
          {
-            if (config.getProfile().equals(p.getId()))
+            if (config.getProfile().equals(((Profile)p).getId()))
             {
-               return p;
+               return (Profile)p;
             }
          }
       }
