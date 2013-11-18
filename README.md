@@ -74,7 +74,7 @@ or specify both <b>-DexcludedPoms</b> and <b>-DexcludedArtifacts</b>
 
 * If you want to print out the missing artifacts list to a file:
 
-> mvn -s maven-settings.xml -DrepoId=jboss-public-repository -Doutput=/home/lgao/dep-list.txt dependency-check:check
+> mvn -s maven-settings.xml -DrepoId=jboss-public-repository -DoutputFile=/home/lgao/dep-list.txt dependency-check:check
 
 If the output is an absolute file path, all missing artifacts will be written to this file in case of multiple modules project.
 

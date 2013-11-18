@@ -37,7 +37,7 @@ import org.codehaus.plexus.util.IOUtil;
  * 
  * The format of the list printed out is: G:A:T:V, where G is the groupId, A is the ArtifactId, T is the Type, V is the version.
  * 
- * It will print the list to console by default, or you can specify an output file by a parameter: <b>-Doutput=</b>.
+ * It will print the list to console by default, or you can specify an output file by a parameter: <b>-DoutputFile=</b>.
  * 
  * This goal checks only one Maven Repository a time, the <b>-DrepoURL</b> has higher priority than <b>-DrepoId</b>.
  *  
